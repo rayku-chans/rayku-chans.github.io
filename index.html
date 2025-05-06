@@ -1,10 +1,91 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Title</title>
+    <meta charset="utf-8" />
+    <title>WebRTC P2P Demo</title>
+    <style>
+        textarea { width: 100%; height: 100px; }
+        button { margin-top: 10px; }
+    </style>
 </head>
 <body>
+<h2>WebRTC P2P 点对点通信</h2>
 
+<div>
+    <button onclick="createOffer()">创建 Offer</button>
+    <button onclick="createAnswer()">创建 Answer</button>
+    <button onclick="addRemoteDesc()">添加远程 SDP</button>
+    <button onclick="sendMessage()">发送消息</button>
+</div>
+
+<h3>本地 SDP</h3>
+<textarea id="localSDP"></textarea>
+
+<h3>远程 SDP</h3>
+<textarea id="remoteSDP"></textarea>
+
+<h3>通信日志</h3>
+<div id="log" style="white-space: pre-line; border: 1px solid #ccc; padding: 10px;"></div>
+
+<script>
+    let pc = new RTCPeerConnection({
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' }, // 免费 STUN
+            // 如需 TURN，可自行搭建或使用第三方（需收费）
+        ]
+    });
+    let dataChannel;
+
+    pc.onicecandidate = e => {
+        if (e.candidate === null) {
+            document.getElementById('localSDP').value = JSON.stringify(pc.localDescription);
+        }
+    };
+
+    pc.ondatachannel = e => {
+        dataChannel = e.channel;
+        setupChannel();
+    };
+
+    function setupChannel() {
+        dataChannel.onopen = () => log("✅ 通道已打开");
+        dataChannel.onmessage = e => log("📨 收到消息: " + e.data);
+    }
+
+    function createOffer() {
+        dataChannel = pc.createDataChannel("chat");
+        setupChannel();
+        pc.createOffer()
+            .then(d => pc.setLocalDescription(d))
+            .catch(console.error);
+    }
+
+    function createAnswer() {
+        let sdp = document.getElementById('remoteSDP').value;
+        if (!sdp) return alert("请先填写远程 SDP");
+
+        pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdp)))
+            .then(() => pc.createAnswer())
+            .then(answer => pc.setLocalDescription(answer))
+            .catch(console.error);
+    }
+
+    function addRemoteDesc() {
+        let sdp = document.getElementById('remoteSDP').value;
+        if (!sdp) return alert("请填写远程 SDP");
+        pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdp)))
+            .catch(console.error);
+    }
+
+    function sendMessage() {
+        if (!dataChannel || dataChannel.readyState !== 'open') return alert("通道未打开");
+        dataChannel.send("你好，P2P 👋");
+        log("📤 已发送: 你好，P2P 👋");
+    }
+
+    function log(msg) {
+        document.getElementById('log').textContent += msg + '\n';
+    }
+</script>
 </body>
 </html>
